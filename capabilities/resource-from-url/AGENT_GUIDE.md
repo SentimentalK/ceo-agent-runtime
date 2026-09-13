@@ -12,6 +12,7 @@
 ./capabilities/resource-from-url/run --url "<URL>" --output "<MANAGED_RESULT_PATH>"
 ```
 
-4. If either URL or managed output path is missing, stop and report the missing input.
-5. If the command succeeds, stop. Do not perform additional exploration.
+4. Extraction may download audio and run local speech recognition, which takes several minutes. If the tool runs as a background task, wait for it to complete. You must ensure `<MANAGED_RESULT_PATH>` is produced before concluding the task.
+5. If either URL or managed output path is missing, stop and report the missing input.
+6. If the command succeeds and the output file exists, stop. Do not perform additional exploration.
 

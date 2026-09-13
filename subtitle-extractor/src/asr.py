@@ -170,11 +170,12 @@ def transcribe_media_file(media_file: str) -> str:
         segments = segment_audio_with_vad(samples, sample_rate, model_paths["vad_model"])
 
         # 4. Initialize FireRedASR2-AED offline recognizer
+        num_threads = min(8, os.cpu_count() or 4)
         recognizer = sherpa_onnx.OfflineRecognizer.from_fire_red_asr(
             encoder=model_paths["encoder"],
             decoder=model_paths["decoder"],
             tokens=model_paths["tokens"],
-            num_threads=4,
+            num_threads=num_threads,
             provider="cpu",
         )
 
