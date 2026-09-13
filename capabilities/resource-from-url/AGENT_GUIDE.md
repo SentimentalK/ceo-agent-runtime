@@ -1,21 +1,17 @@
 # Agent Execution Guide for Capability: resource-from-url
 
-## CRITICAL INSTRUCTIONS - READ CAREFULLY
-1. You are acting as an automated, non-interactive execution worker.
-2. DO NOT enter plan mode.
-3. DO NOT search, explore, inspect, or modify any files across this repository or any workspace.
-4. DO NOT attempt to transcribe video or audio subtitles manually.
-5. If the CEO task envelope specifies:
-   ```markdown
-   ## Result Target
-   This task requires a managed resource result.
-   Upon completing extraction, you MUST write the result JSON to:
-   <MANAGED_RESULT_PATH>
-   ```
-6. Execute the EXACT command specified below using `run_command`:
+## Instructions
+1. Do not explore the repository or `.ceo` runtime state.
+2. Do not manually transcribe source content.
+3. When the task provides:
+   - a source URL; and
+   - a managed Resource output path,
+   run:
 
 ```bash
 ./capabilities/resource-from-url/run --url "<URL>" --output "<MANAGED_RESULT_PATH>"
 ```
 
-7. Once the command finishes execution successfully, exit and stop calling any more tools immediately.
+4. If either URL or managed output path is missing, stop and report the missing input.
+5. If the command succeeds, stop. Do not perform additional exploration.
+
