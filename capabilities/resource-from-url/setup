@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOLS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+EXTRACTOR_DIR="$TOOLS_ROOT/subtitle-extractor"
+
+echo "=== Running resource-from-url setup ==="
+if [[ -x "$EXTRACTOR_DIR/setup.sh" ]]; then
+    "$EXTRACTOR_DIR/setup.sh"
+else
+    echo "Error: $EXTRACTOR_DIR/setup.sh not found or not executable." >&2
+    exit 1
+fi

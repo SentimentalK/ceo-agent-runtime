@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOLS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+EXTRACTOR_DIR="$TOOLS_ROOT/subtitle-extractor"
+PYTHON_BIN="$EXTRACTOR_DIR/.venv/bin/python"
+
+URL=""
+OUTPUT_PATH=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --url)
+            URL="$2"
+            shift 2
+            ;;
+        --output|-o)
+            OUTPUT_PATH="$2"
+            shift 2
+            ;;
+        *)
+            if [[ -z "$URL" ]]; then
+                URL="$1"
+            elif [[ -z "$OUTPUT_PATH" ]]; then
+                OUTPUT_PATH="$1"
+            else
+                echo "Unknown argument: $1" >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$URL" ]]; then
+    echo "Error: URL is required. Usage: $0 --url <URL> --output <OUTPUT_PATH>" >&2
+    exit 1
+fi
+
+if [[ -z "$OUTPUT_PATH" ]]; then
+    echo "Error: Output path is required. Usage: $0 --url <URL> --output <OUTPUT_PATH>" >&2
+    exit 1
+fi
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+    echo "Error: Virtualenv python not found at $PYTHON_BIN. Please ensure subtitle-extractor setup has run." >&2
+    exit 2
+fi
+
+OUT_DIR="$(dirname "$OUTPUT_PATH")"
+mkdir -p "$OUT_DIR"
+
+TMP_RAW_JSON="$OUT_DIR/.raw_extract_$$_${RANDOM}.json"
+trap 'rm -f "$TMP_RAW_JSON"' EXIT
+
+echo "=== Extracting content from URL: $URL ==="
+set +e
+"$PYTHON_BIN" "$EXTRACTOR_DIR/src/cli.py" extract "$URL" --json > "$TMP_RAW_JSON" 2>&1
+SCRIPT_EXIT_CODE=$?
+set -e
+
+if [[ $SCRIPT_EXIT_CODE -ne 0 || ! -s "$TMP_RAW_JSON" ]]; then
+    echo "Error: subtitle-extractor failed with exit code $SCRIPT_EXIT_CODE" >&2
+    cat "$TMP_RAW_JSON" >&2 || true
+    exit 1
+fi
+
+# Run transformation in Python to construct ManagedResourceResult
+"$PYTHON_BIN" - "$TMP_RAW_JSON" "$OUTPUT_PATH" << 'PYEOF'
+import sys
+import os
+import json
+import datetime
+import re
+
+raw_file = sys.argv[1]
+out_path = sys.argv[2]
+
+try:
+    with open(raw_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    sys.stderr.write(f"Error parsing extractor JSON output: {e}\n")
+    sys.exit(1)
+
+transcript_status = data.get("transcript_status")
+transcript = data.get("transcript")
+
+if transcript_status != "available" or not transcript or not transcript.strip():
+    sys.stderr.write(f"Error: Transcript is not available (status: {transcript_status})\n")
+    sys.exit(1)
+
+content = transcript.strip()
+if len(content.encode("utf-8")) > 8 * 1024 * 1024:
+    sys.stderr.write("Error: Extracted content exceeds 8 MiB\n")
+    sys.exit(1)
+
+result = {
+    "content": content
+}
+
+meta_raw = data.get("metadata") or {}
+metadata = {}
+
+title = meta_raw.get("title")
+if title and isinstance(title, str) and title.strip():
+    t = title.strip()
+    if len(t.encode("utf-8")) <= 1024:
+        metadata["title"] = t
+
+author = meta_raw.get("creator") or meta_raw.get("author")
+if author and isinstance(author, str) and author.strip():
+    a = author.strip()
+    if len(a.encode("utf-8")) <= 1024:
+        metadata["author"] = a
+
+published_at = meta_raw.get("published_at")
+if published_at and isinstance(published_at, str) and published_at.strip():
+    p = published_at.strip()
+    # Validate / convert to RFC3339
+    rfc3339_re = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$')
+    if rfc3339_re.match(p):
+        metadata["published_at"] = p
+    else:
+        try:
+            dt = datetime.datetime.fromisoformat(p)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            metadata["published_at"] = dt.isoformat().replace("+00:00", "Z")
+        except Exception:
+            pass
+
+language = meta_raw.get("language")
+if language and isinstance(language, str) and language.strip():
+    l = language.strip()
+    if len(l.encode("utf-8")) <= 64:
+        metadata["language"] = l
+
+if metadata:
+    result["metadata"] = metadata
+
+# Extraction provenance
+method = data.get("transcript_method") or "subtitle-extractor"
+if not isinstance(method, str) or not method.strip():
+    method = "subtitle-extractor"
+method = method.strip()
+if len(method.encode("utf-8")) > 128:
+    method = method[:128]
+
+now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+result["extraction"] = {
+    "method": method,
+    "extracted_at": now_iso
+}
+
+out_dir = os.path.dirname(os.path.abspath(out_path))
+os.makedirs(out_dir, exist_ok=True)
+tmp_out = os.path.join(out_dir, f".tmp_managed_{os.getpid()}.json")
+
+with open(tmp_out, "w", encoding="utf-8") as f:
+    json.dump(result, f, ensure_ascii=False, indent=2)
+    f.flush()
+    os.fsync(f.fileno())
+
+os.replace(tmp_out, out_path)
+print(f"Successfully generated managed-result.json at {out_path}")
+PYEOF
+
+echo "Done."
