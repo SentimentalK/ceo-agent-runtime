@@ -52,17 +52,21 @@ OUT_DIR="$(dirname "$OUTPUT_PATH")"
 mkdir -p "$OUT_DIR"
 
 TMP_RAW_JSON="$OUT_DIR/.raw_extract_$$_${RANDOM}.json"
-trap 'rm -f "$TMP_RAW_JSON"' EXIT
+TMP_ERR="$OUT_DIR/.raw_extract_$$_${RANDOM}.err"
+trap 'rm -f "$TMP_RAW_JSON" "$TMP_ERR"' EXIT
 
-echo "=== Extracting content from URL: $URL ==="
+echo "=== Extracting content from URL: $URL ===" >&2
 set +e
-"$PYTHON_BIN" "$EXTRACTOR_DIR/src/cli.py" extract "$URL" --json > "$TMP_RAW_JSON" 2>&1
+"$PYTHON_BIN" "$EXTRACTOR_DIR/src/cli.py" extract "$URL" --json > "$TMP_RAW_JSON" 2>"$TMP_ERR"
 SCRIPT_EXIT_CODE=$?
 set -e
 
+if [[ -s "$TMP_ERR" ]]; then
+    cat "$TMP_ERR" >&2
+fi
+
 if [[ $SCRIPT_EXIT_CODE -ne 0 || ! -s "$TMP_RAW_JSON" ]]; then
     echo "Error: subtitle-extractor failed with exit code $SCRIPT_EXIT_CODE" >&2
-    cat "$TMP_RAW_JSON" >&2 || true
     exit 1
 fi
 
