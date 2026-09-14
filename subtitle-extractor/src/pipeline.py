@@ -10,11 +10,13 @@ from typing import Optional, Tuple
 
 try:
     from .adapters import get_adapter_for_url
+    from .content_grade import is_content_grade_text, is_no_speech_transcript
     from .markdown import export_markdown, sanitize_filename
     from .models import ContentMetadata, ResolvedContent
     from .resolver import resolve_url as _standalone_resolve_url
 except (ImportError, ValueError):
     from adapters import get_adapter_for_url
+    from content_grade import is_content_grade_text, is_no_speech_transcript
     from markdown import export_markdown, sanitize_filename
     from models import ContentMetadata, ResolvedContent
     from resolver import resolve_url as _standalone_resolve_url
@@ -48,6 +50,27 @@ class Pipeline:
         Independently resolves URL -> checks native transcript -> acquires media/ASR if needed.
         Never requires a prior resolve_url call.
         """
+        adapter = get_adapter_for_url(
+            url,
+            browser_name=self.browser_name,
+            profile_name=self.profile_name,
+        )
+        print(f"▶ 识别平台: {adapter.__class__.__name__} ({url})", file=sys.stderr)
+
+        # Step 1: Resolve metadata (anonymous for WeChat; no cookies / media / ASR)
+        metadata = adapter.resolve_metadata(url)
+
+        # Step 1b: WeChat description is already on the metadata response.
+        # If it is content-grade, publish it and skip media / ASR / OCR.
+        if metadata.source_type == "weixin" and is_content_grade_text(metadata.description):
+            print("✔ 微信 description 已达 content-grade，跳过媒体下载与 ASR", file=sys.stderr)
+            return ResolvedContent(
+                metadata=metadata,
+                transcript=metadata.description.strip(),
+                transcript_status="available",
+                transcript_method="description",
+            )
+
         # Lazy import heavy model manager, media providers, and ASR modules
         try:
             from .asr import download_media_for_asr, transcribe_media_file
@@ -70,26 +93,19 @@ class Pipeline:
             )
             from model_manager import get_tmp_dir
 
-        adapter = get_adapter_for_url(
-            url,
-            browser_name=self.browser_name,
-            profile_name=self.profile_name,
-        )
-        print(f"▶ 识别平台: {adapter.__class__.__name__} ({url})", file=sys.stderr)
-
         with tempfile.TemporaryDirectory(prefix="ingest_", dir=str(get_tmp_dir())) as tmp_dir:
-            # Step 1: Resolve metadata
-            metadata = adapter.resolve_metadata(url)
 
-            # Step 2: Try native subtitles first
+            # Step 2: Try native subtitles (WeChat has none; YouTube/Bilibili may)
             native = adapter.try_get_native_transcript(url, metadata, tmp_dir)
-            if native:
+            if native and not is_no_speech_transcript(native.text):
                 return ResolvedContent(
                     metadata=metadata,
                     transcript=native.text,
                     transcript_status="available",
                     transcript_method=native.method,
                 )
+            if native and is_no_speech_transcript(native.text):
+                print("⚠ 原生字幕仅为静音标记，忽略", file=sys.stderr)
 
             # Step 3: Native transcript unavailable -> Attempt media acquisition & ASR fallback
             media_file = None
@@ -129,7 +145,9 @@ class Pipeline:
                     try:
                         print("▶ 运行 FireRedASR2-AED 语音识别...", file=sys.stderr)
                         transcript = transcribe_media_file(media_file)
-                        if transcript:
+                        if is_no_speech_transcript(transcript):
+                            print("⚠ ASR 无有效人声 (no_speech)，不写入 content", file=sys.stderr)
+                        else:
                             print("✔ ASR 语音识别成功！", file=sys.stderr)
                             return ResolvedContent(
                                 metadata=metadata,

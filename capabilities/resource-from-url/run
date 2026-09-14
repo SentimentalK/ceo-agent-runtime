@@ -71,7 +71,7 @@ if [[ $SCRIPT_EXIT_CODE -ne 0 || ! -s "$TMP_RAW_JSON" ]]; then
 fi
 
 # Run transformation in Python to construct ManagedResourceResult
-"$PYTHON_BIN" - "$TMP_RAW_JSON" "$OUTPUT_PATH" << 'PYEOF'
+"$PYTHON_BIN" - "$TMP_RAW_JSON" "$OUTPUT_PATH" "$EXTRACTOR_DIR" << 'PYEOF'
 import sys
 import os
 import json
@@ -80,6 +80,9 @@ import re
 
 raw_file = sys.argv[1]
 out_path = sys.argv[2]
+extractor_dir = sys.argv[3]
+sys.path.insert(0, os.path.join(extractor_dir, "src"))
+from content_grade import is_no_speech_transcript
 
 try:
     with open(raw_file, "r", encoding="utf-8") as f:
@@ -91,8 +94,13 @@ except Exception as e:
 transcript_status = data.get("transcript_status")
 transcript = data.get("transcript")
 
-if transcript_status != "available" or not transcript or not transcript.strip():
-    sys.stderr.write(f"Error: Transcript is not available (status: {transcript_status})\n")
+if (
+    transcript_status != "available"
+    or is_no_speech_transcript(transcript)
+):
+    sys.stderr.write(
+        f"Error: Transcript is not available (status: {transcript_status})\n"
+    )
     sys.exit(1)
 
 content = transcript.strip()

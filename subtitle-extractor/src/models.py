@@ -58,7 +58,7 @@ class ResolvedContent:
     metadata: ContentMetadata
     transcript: Optional[str] = None
     transcript_status: str = "unavailable"  # "available", "unavailable", "failed"
-    transcript_method: Optional[str] = None  # "subtitles", "auto-subtitles", "firered-asr2-aed", None
+    transcript_method: Optional[str] = None  # "description", "subtitles", "auto-subtitles", "firered-asr2-aed", None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert resolved content to JSON-serializable dictionary."""
