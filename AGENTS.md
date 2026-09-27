@@ -10,6 +10,6 @@
 
 Capability routing:
 - URL/video/source-content extraction + managed Resource result
-  -> read `capabilities/resource-from-url/AGENT_GUIDE.md`
+  -> read `capabilities/content.extract_url/AGENT_GUIDE.md`
   -> follow it directly.
 
