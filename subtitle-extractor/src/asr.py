@@ -6,6 +6,7 @@ Fully host-native, CPU-capable, zero Whisper dependencies.
 
 import glob
 import os
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -138,6 +139,69 @@ def segment_audio_with_vad(
     return speech_segments
 
 
+def _driver_libcuda_loaded() -> bool:
+    """True if the CUDA driver (libcuda) is mapped into this process."""
+    try:
+        for line in open("/proc/self/maps"):
+            if "libcuda.so" in line:
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def _create_fire_red_recognizer(model_paths, num_threads: int):
+    """
+    Create the FireRedASR2-AED offline recognizer.
+
+    Provider selection:
+    - FIRERED_ASR_PROVIDER env var: "cuda" | "cpu" | "auto" (default "auto")
+    - "auto" prefers CUDA and falls back to CPU when the GPU is unusable.
+      sherpa-onnx CPU-only builds silently fall back on provider="cuda",
+      so we verify the CUDA driver actually loaded into this process.
+    """
+    import sherpa_onnx
+
+    desired = (os.environ.get("FIRERED_ASR_PROVIDER") or "auto").strip().lower()
+    if desired not in ("cuda", "cpu", "auto"):
+        desired = "auto"
+
+    if desired in ("cuda", "auto"):
+        try:
+            recognizer = sherpa_onnx.OfflineRecognizer.from_fire_red_asr(
+                encoder=model_paths["encoder"],
+                decoder=model_paths["decoder"],
+                tokens=model_paths["tokens"],
+                num_threads=num_threads,
+                provider="cuda",
+            )
+            if _driver_libcuda_loaded():
+                print(f"▶ FireRedASR2-AED 使用 GPU (cuda provider, threads={num_threads})", file=sys.stderr, flush=True)
+                return recognizer
+            if desired == "cuda":
+                raise RuntimeError(
+                    "CUDA provider requested but this sherpa-onnx build lacks GPU support "
+                    "(libcuda not loaded; CPU-only build silently fell back)."
+                )
+            print("▶ CUDA 不可用 (sherpa-onnx 为 CPU-only 构建), 回退到 CPU", file=sys.stderr, flush=True)
+        except RuntimeError:
+            if desired == "cuda":
+                raise
+        except Exception as exc:
+            if desired == "cuda":
+                raise
+            print(f"▶ CUDA 初始化失败 ({exc}), 回退到 CPU", file=sys.stderr, flush=True)
+
+    print(f"▶ FireRedASR2-AED 使用 CPU (cpu provider, threads={num_threads})", file=sys.stderr, flush=True)
+    return sherpa_onnx.OfflineRecognizer.from_fire_red_asr(
+        encoder=model_paths["encoder"],
+        decoder=model_paths["decoder"],
+        tokens=model_paths["tokens"],
+        num_threads=num_threads,
+        provider="cpu",
+    )
+
+
 def transcribe_media_file(media_file: str) -> str:
     """
     Transcribe an audio or video file using local FireRedASR2-AED INT8 model
@@ -168,25 +232,27 @@ def transcribe_media_file(media_file: str) -> str:
 
         # 3. Speech segmentation using Silero VAD
         segments = segment_audio_with_vad(samples, sample_rate, model_paths["vad_model"])
-
-        # 4. Initialize FireRedASR2-AED offline recognizer
-        num_threads = min(8, os.cpu_count() or 4)
-        recognizer = sherpa_onnx.OfflineRecognizer.from_fire_red_asr(
-            encoder=model_paths["encoder"],
-            decoder=model_paths["decoder"],
-            tokens=model_paths["tokens"],
-            num_threads=num_threads,
-            provider="cpu",
+        total_speech_sec = sum(len(s) for s in segments) / sample_rate
+        print(
+            f"▶ VAD 分段完成: {len(segments)} 段, 有效语音 {total_speech_sec:.0f} 秒",
+            file=sys.stderr,
+            flush=True,
         )
 
+        # 4. Initialize FireRedASR2-AED offline recognizer (prefer GPU, fall back to CPU)
+        num_threads = min(8, os.cpu_count() or 4)
+        recognizer = _create_fire_red_recognizer(model_paths, num_threads)
+
         recognized_sentences: List[str] = []
-        for seg_samples in segments:
+        for idx, seg_samples in enumerate(segments):
             stream = recognizer.create_stream()
             stream.accept_waveform(sample_rate, seg_samples)
             recognizer.decode_stream(stream)
             text = stream.result.text.strip()
             if text:
                 recognized_sentences.append(text)
+            if (idx + 1) % 10 == 0 or idx + 1 == len(segments):
+                print(f"▶ ASR 进度: {idx + 1}/{len(segments)} 段", file=sys.stderr, flush=True)
 
         # 5. Format sentences into clean paragraphs
         if not recognized_sentences:
