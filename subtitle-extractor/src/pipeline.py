@@ -10,13 +10,13 @@ from typing import Optional, Tuple
 
 try:
     from .adapters import get_adapter_for_url
-    from .content_grade import is_content_grade_text, is_no_speech_transcript
+    from .content_grade import is_no_speech_transcript
     from .markdown import export_markdown, sanitize_filename
     from .models import ContentMetadata, ResolvedContent
     from .resolver import resolve_url as _standalone_resolve_url
 except (ImportError, ValueError):
     from adapters import get_adapter_for_url
-    from content_grade import is_content_grade_text, is_no_speech_transcript
+    from content_grade import is_no_speech_transcript
     from markdown import export_markdown, sanitize_filename
     from models import ContentMetadata, ResolvedContent
     from resolver import resolve_url as _standalone_resolve_url
@@ -59,17 +59,6 @@ class Pipeline:
 
         # Step 1: Resolve metadata (anonymous for WeChat; no cookies / media / ASR)
         metadata = adapter.resolve_metadata(url)
-
-        # Step 1b: WeChat description is already on the metadata response.
-        # If it is content-grade, publish it and skip media / ASR / OCR.
-        if metadata.source_type == "weixin" and is_content_grade_text(metadata.description):
-            print("✔ 微信 description 已达 content-grade，跳过媒体下载与 ASR", file=sys.stderr)
-            return ResolvedContent(
-                metadata=metadata,
-                transcript=metadata.description.strip(),
-                transcript_status="available",
-                transcript_method="description",
-            )
 
         # Lazy import heavy model manager, media providers, and ASR modules
         try:

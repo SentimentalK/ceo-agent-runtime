@@ -22,7 +22,7 @@ _URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 _SENTENCE_SPLIT_RE = re.compile(r"[。！？!?；;\n]+")
 _WHITESPACE_RE = re.compile(r"\s+")
 
-_MIN_NONE_HASHTAG_CHARS = 80
+_MIN_NONE_HASHTAG_CHARS = 140
 _MIN_SENTENCE_LIKE = 2
 _MIN_SENTENCE_CHARS = 6
 _MIN_CLEAN_RATIO = 0.5

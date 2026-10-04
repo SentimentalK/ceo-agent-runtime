@@ -38,8 +38,7 @@ def extract_url(
 
     - Completely self-contained: independently resolves the URL without requiring
       a prior resolve_url() call.
-    - WeChat: if feed description is content-grade, use it and skip media/ASR.
-    - Otherwise checks for platform native subtitles.
+    - Checks for platform native subtitles.
     - If native subtitles are unavailable, acquires media (reusing local browser
       auth state if necessary) and runs local FireRedASR2-AED offline speech recognition.
     - ASR silence tokens such as `<sil>` are no_speech, never published as content.

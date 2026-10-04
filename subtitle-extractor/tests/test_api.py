@@ -130,8 +130,8 @@ class TestTwoCapabilities(unittest.TestCase):
             self.assertEqual(result.transcript_method, "firered-asr2-aed")
             mock_transcribe.assert_called_once_with("/tmp/mock_media.mp4")
 
-    def test_extract_weixin_uses_content_grade_description_without_asr(self):
-        """WeChat content-grade description is published immediately; media/ASR stay cold."""
+    def test_extract_weixin_always_runs_media_and_asr(self):
+        """WeChat always acquires media and runs ASR regardless of description length."""
         description = (
             "前端的下一个变化，可能不是新的 UI 框架，而是一份 AI 能读懂的设计说明。"
             "VoltAgent/awesome-design-md 把 Stripe、Linear、Figma、Ferrari 等品牌风格整理成 DESIGN.md，"
@@ -149,19 +149,19 @@ class TestTwoCapabilities(unittest.TestCase):
         )
 
         with patch("src.adapters.weixin.WeixinAdapter.resolve_metadata", return_value=fake_meta), \
-             patch("src.adapters.weixin.WeixinAdapter.try_get_native_transcript") as mock_native, \
-             patch("src.media.weixin.WeixinMediaProvider.acquire") as mock_acquire, \
-             patch("src.asr.transcribe_media_file") as mock_asr:
+             patch("src.adapters.weixin.WeixinAdapter.try_get_native_transcript", return_value=None), \
+             patch("src.media.weixin.WeixinMediaProvider.acquire", return_value="/tmp/mock_media.mp4") as mock_acquire, \
+             patch("src.asr.transcribe_media_file", return_value="语音转录内容") as mock_asr, \
+             patch("os.path.exists", return_value=True), \
+             patch("os.remove"):
 
             result = extract_url("https://weixin.qq.com/sph/AvVRIgX3jV")
 
-            self.assertEqual(result.transcript, description.strip())
+            self.assertEqual(result.transcript, "语音转录内容")
             self.assertEqual(result.transcript_status, "available")
-            self.assertEqual(result.transcript_method, "description")
-            self.assertNotIn("<sil>", result.transcript)
-            mock_native.assert_not_called()
-            mock_acquire.assert_not_called()
-            mock_asr.assert_not_called()
+            self.assertEqual(result.transcript_method, "firered-asr2-aed")
+            mock_acquire.assert_called_once()
+            mock_asr.assert_called_once()
 
     def test_extract_weixin_marketing_description_falls_back_to_asr(self):
         """Short WeChat marketing copy is not content-grade; ASR still runs."""
