@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Read, react to, and delete messages in a Discord channel via the REST API.
+Read, send, react to, and delete messages in a Discord channel via the REST API.
 
 Config (environment variables override <repo>/.env):
   DISCORD_BOT_TOKEN           bot token
@@ -20,6 +20,7 @@ from pathlib import Path
 API_BASE = "https://discord.com/api/v10"
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 USER_AGENT = "DiscordBot (https://github.com/SentimentalK/ceo-agent-runtime, 1.0)"
+MAX_MESSAGE_LEN = 2000
 
 
 def load_config() -> dict:
@@ -43,12 +44,15 @@ def fail(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def api(token: str, method: str, path: str, query: dict = None):
+def api(token: str, method: str, path: str, query: dict = None, payload: dict = None):
     url = API_BASE + path
     if query:
         url += "?" + urllib.parse.urlencode({k: v for k, v in query.items() if v is not None})
     headers = {"Authorization": f"Bot {token}", "User-Agent": USER_AGENT}
     data = b"" if method == "PUT" else None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
 
     for _ in range(3):
         req = urllib.request.Request(url, method=method, headers=headers, data=data)
@@ -89,9 +93,46 @@ def cmd_read(token: str, channel: str, args) -> dict:
                    {"limit": args.limit, "after": args.after})
     messages = sorted(messages, key=lambda m: int(m["id"]))
     if args.unhandled:
+        bot_id = api(token, "GET", "/users/@me")["id"]
         messages = [m for m in messages
-                    if not any(r.get("me") for r in m.get("reactions", []))]
+                    if m["author"]["id"] != bot_id
+                    and not any(r.get("me") for r in m.get("reactions", []))]
     return {"ok": True, "channel_id": channel, "messages": [format_message(m) for m in messages]}
+
+
+def split_text(text: str) -> list:
+    """Split text into chunks within Discord's limit, preferring line breaks."""
+    chunks = []
+    while len(text) > MAX_MESSAGE_LEN:
+        cut = text.rfind("\n", 0, MAX_MESSAGE_LEN)
+        if cut <= 0:
+            cut = MAX_MESSAGE_LEN
+        chunks.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    if text:
+        chunks.append(text)
+    return chunks
+
+
+def cmd_send(token: str, channel: str, args) -> dict:
+    if args.file:
+        text = Path(args.file).read_text(encoding="utf-8")
+    elif args.text == "-":
+        text = sys.stdin.read()
+    else:
+        text = args.text or ""
+    text = text.strip()
+    if not text:
+        fail("Message text is empty")
+
+    sent_ids = []
+    for i, chunk in enumerate(split_text(text)):
+        payload = {"content": chunk, "allowed_mentions": {"parse": [], "replied_user": False}}
+        if args.reply_to and i == 0:
+            payload["message_reference"] = {"message_id": args.reply_to, "fail_if_not_exists": False}
+        msg = api(token, "POST", f"/channels/{channel}/messages", payload=payload)
+        sent_ids.append(msg["id"])
+    return {"ok": True, "channel_id": channel, "message_ids": sent_ids}
 
 
 def cmd_react(token: str, channel: str, args) -> dict:
@@ -116,6 +157,11 @@ def main() -> None:
     p_read.add_argument("--unhandled", action="store_true",
                         help="Skip messages the bot has already reacted to")
 
+    p_send = sub.add_parser("send", help="Send a message (split if longer than 2000 chars)")
+    p_send.add_argument("text", nargs="?", help="Message text, or - to read stdin")
+    p_send.add_argument("--file", help="Read message text from this file")
+    p_send.add_argument("--reply-to", help="Reply to this message ID")
+
     p_react = sub.add_parser("react", help="Add a reaction to a message")
     p_react.add_argument("message_id")
     p_react.add_argument("--emoji", default="✅")
@@ -135,7 +181,7 @@ def main() -> None:
     if not channel:
         fail("No channel: pass --channel or set DISCORD_DEFAULT_CHANNEL_ID", 2)
 
-    handlers = {"read": cmd_read, "react": cmd_react, "delete": cmd_delete}
+    handlers = {"read": cmd_read, "send": cmd_send, "react": cmd_react, "delete": cmd_delete}
     result = handlers[args.command](token, channel, args)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

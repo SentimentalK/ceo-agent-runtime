@@ -9,7 +9,7 @@ This repository contains reusable capabilities. The user and CEO agents use them
 | `content.extract_url` | Get the text, subtitles, or transcript of a URL (YouTube, Bilibili, WeChat Channels). | `capabilities/content.extract_url/AGENT_GUIDE.md` |
 | `video.generate_subtitles` | Make SRT and VTT subtitles for a local video file. Put the subtitles into an MP4. | `capabilities/video.generate_subtitles/AGENT_GUIDE.md` |
 | `document.pptx_to_md` | Convert a PPTX file to Markdown, with OCR of images. | `capabilities/document.pptx_to_md/AGENT_GUIDE.md` |
-| `discord.channel` | Read messages in a Discord channel. Add a reaction to a message. Delete a message. | `capabilities/discord.channel/AGENT_GUIDE.md` |
+| `discord.channel` | Read messages in a Discord channel. Send a reply. Add a reaction. Delete a message. | `capabilities/discord.channel/AGENT_GUIDE.md` |
 
 ## Rules
 
