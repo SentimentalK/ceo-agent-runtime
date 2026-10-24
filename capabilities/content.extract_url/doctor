@@ -2,8 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-EXTRACTOR_DIR="$TOOLS_ROOT/subtitle-extractor"
+EXTRACTOR_DIR="$SCRIPT_DIR"
 VENV_DIR="$EXTRACTOR_DIR/.venv"
 
 CHECKS="[]"
@@ -69,7 +68,7 @@ fi
 
 # 2. Check Virtualenv
 if [[ "$BASE_READY" == true ]]; then
-    if [[ -d "$VENV_DIR" && -x "$VENV_DIR/bin/python" && -x "$VENV_DIR/bin/pip" ]]; then
+    if [[ -d "$VENV_DIR" && -x "$VENV_DIR/bin/python" ]]; then
         CHECKS=$(add_check "virtualenv" "ok" "Virtual environment exists at $VENV_DIR")
     else
         CHECKS=$(add_check "virtualenv" "failed" "Virtual environment missing or incomplete at $VENV_DIR")
@@ -108,7 +107,7 @@ else
 fi
 
 # 5. Check Optional FireRedASR2 Model
-if [[ -d "$EXTRACTOR_DIR/.models" && -f "$EXTRACTOR_DIR/.models/FireRedASR2-AED/model.pth" ]]; then
+if [[ "$BASE_READY" == true ]] && (cd "$EXTRACTOR_DIR/src" && "$VENV_DIR/bin/python" -c 'import sys, model_manager as m; sys.exit(0 if m.is_firered_ready() and m.is_vad_ready() else 1)') &>/dev/null; then
     CHECKS=$(add_check "asr_model" "ok" "Pre-downloaded FireRedASR2-AED model found")
 else
     CHECKS=$(add_check "asr_model" "missing" "Offline ASR model not pre-downloaded; will download lazily if ASR fallback is triggered")

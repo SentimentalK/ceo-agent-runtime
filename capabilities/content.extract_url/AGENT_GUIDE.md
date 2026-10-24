@@ -1,22 +1,30 @@
 # content.extract_url
 
-用途：
-从 URL 提取可用的正文、字幕或转录结果。
+Gets the text of a URL. It uses native subtitles first. If there are no subtitles, it downloads the audio and uses local speech recognition (ASR).
 
-执行：
+Supported sites: YouTube, Bilibili, WeChat Channels (`weixin.qq.com/sph/...`).
 
-./capabilities/content.extract_url/run \
-  --url "<URL>" \
-  --output-dir "<OUTPUT_DIR>"
+## Run
 
-输出：
+```bash
+capabilities/content.extract_url/run --url "<URL>" --output-dir "<OUTPUT_DIR>"
+```
 
-<OUTPUT_DIR>/result.json
-<OUTPUT_DIR>/completion.json
+## Output
 
-规则：
+- `<OUTPUT_DIR>/result.json`: `metadata`, `transcript`, `transcript_status`, `transcript_method`.
+- `<OUTPUT_DIR>/completion.json`: exit code, `business_status`, `error`.
 
-- 使用这个 capability，不要自行重新实现同类提取逻辑。
-- 命令以前台方式运行直到完成。
-- 成功后读取 result.json。
-- 失败时读取 completion.json 并报告实际错误。
+## Rules
+
+1. Run the command in the foreground. Wait until it stops. ASR can take several minutes.
+2. If the command succeeds, read `result.json`.
+3. If `transcript_status` is not `available`, tell the user. Do not write a transcript yourself.
+4. If the command fails, read `completion.json` and the command output. Report the error.
+5. If the command says that setup is necessary, run `capabilities/content.extract_url/setup`.
+6. To examine the environment, run `capabilities/content.extract_url/doctor`.
+
+## Requirements
+
+- WeChat Channels: the user must be logged in to `yuanbao.tencent.com` in local Chrome.
+- ASR: `ffmpeg` must be in `PATH`. The ASR model downloads on first use (about 1.2 GB).

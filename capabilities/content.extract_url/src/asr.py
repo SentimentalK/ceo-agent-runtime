@@ -150,7 +150,7 @@ def _driver_libcuda_loaded() -> bool:
     return False
 
 
-def _create_fire_red_recognizer(model_paths, num_threads: int):
+def create_fire_red_recognizer(model_paths, num_threads: int):
     """
     Create the FireRedASR2-AED offline recognizer.
 
@@ -212,7 +212,7 @@ def transcribe_media_file(media_file: str) -> str:
         import sherpa_onnx
     except ImportError:
         raise RuntimeError(
-            "sherpa-onnx is not installed. Run `./setup.sh` or `pip install sherpa-onnx==1.13.7`."
+            "sherpa-onnx is not installed. Run `./setup` or `pip install sherpa-onnx==1.13.7`."
         )
 
     # 1. Ensure models are ready
@@ -241,7 +241,7 @@ def transcribe_media_file(media_file: str) -> str:
 
         # 4. Initialize FireRedASR2-AED offline recognizer (prefer GPU, fall back to CPU)
         num_threads = min(8, os.cpu_count() or 4)
-        recognizer = _create_fire_red_recognizer(model_paths, num_threads)
+        recognizer = create_fire_red_recognizer(model_paths, num_threads)
 
         recognized_sentences: List[str] = []
         for idx, seg_samples in enumerate(segments):

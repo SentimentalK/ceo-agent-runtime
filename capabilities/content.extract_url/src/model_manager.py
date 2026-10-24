@@ -1,7 +1,7 @@
 """
 Model Manager for FireRedASR2-AED and Silero VAD offline models.
 Handles checksum verification, safe tar extraction, staging verification,
-and atomic activation under subtitle-extractor/.models/.
+and atomic activation under the capability-local .models/.
 """
 
 import hashlib

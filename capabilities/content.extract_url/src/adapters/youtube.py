@@ -25,7 +25,7 @@ class YouTubeAdapter(BaseAdapter):
     """Adapter for YouTube URLs."""
 
     YT_ARGS = [
-        "--extractor-args", "youtube:player_client=android,web",
+        "--extractor-args", "youtube:player_client=android,web,default",
         "--remote-components", "ejs:github",
     ]
 

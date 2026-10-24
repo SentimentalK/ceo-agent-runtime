@@ -2,8 +2,7 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-EXTRACTOR_DIR="$TOOLS_ROOT/subtitle-extractor"
+EXTRACTOR_DIR="$SCRIPT_DIR"
 PYTHON_BIN="$EXTRACTOR_DIR/.venv/bin/python"
 
 INPUT_FILE=""
