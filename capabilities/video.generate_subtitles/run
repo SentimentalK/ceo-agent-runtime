@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="$SCRIPT_DIR/../content.extract_url/.venv/bin/python"
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+    echo "Error: $PYTHON_BIN not found. Run capabilities/content.extract_url/setup first." >&2
+    exit 2
+fi
+
+exec "$PYTHON_BIN" "$SCRIPT_DIR/generate_subtitles.py" "$@"
