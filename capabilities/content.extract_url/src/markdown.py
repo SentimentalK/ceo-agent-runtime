@@ -66,20 +66,22 @@ def export_markdown(content: ResolvedContent) -> str:
 
     title = meta.title or "Untitled"
     source_url = meta.canonical_url or meta.source_url
+    is_article = content.transcript_method == "article"
     
     sections = [
         yaml_header,
         f"\n# {title}",
-        f"\n> 视频链接: {source_url}"
+        f"\n> {'原文链接' if is_article else '视频链接'}: {source_url}"
     ]
 
     if meta.description and meta.description.strip():
         sections.append(f"\n## Description\n\n{meta.description.strip()}")
 
-    sections.append("\n## Transcript\n")
+    heading = "Content" if is_article else "Transcript"
+    sections.append(f"\n## {heading}\n")
     if content.transcript and content.transcript.strip():
         sections.append(content.transcript.strip())
     else:
-        sections.append("Transcript unavailable.")
+        sections.append(f"{heading} unavailable.")
 
     return "\n".join(sections) + "\n"

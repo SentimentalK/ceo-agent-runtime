@@ -160,7 +160,7 @@ class TestResolverBoundary(unittest.TestCase):
     def test_unsupported_url_raises_typed_error(self):
         """Verify unsupported URL raises UnsupportedURLError (both ResolveError and ValueError)."""
         with self.assertRaises(UnsupportedURLError) as ctx:
-            resolve_url("https://tiktok.com/@user/video/123")
+            resolve_url("ftp://tiktok.com/@user/video/123")
         self.assertIsInstance(ctx.exception, ResolveError)
         self.assertIsInstance(ctx.exception, ValueError)
 

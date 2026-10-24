@@ -55,8 +55,8 @@ class TestPlatformDetection(unittest.TestCase):
 
     def test_unknown_detection(self):
         unknown_urls = [
-            "https://example.com/video/123",
-            "https://vimeo.com/76979871",
+            "ftp://example.com/video/123",
+            "not-a-url",
         ]
         for u in unknown_urls:
             with self.assertRaises(ValueError):

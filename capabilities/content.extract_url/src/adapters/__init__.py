@@ -6,6 +6,8 @@ try:
     from .base import BaseAdapter
     from .bilibili import BilibiliAdapter
     from .weixin import WeixinAdapter
+    from .weixin_article import WeixinArticleAdapter
+    from .web import WebAdapter
     from .youtube import YouTubeAdapter
     from ..models import UnsupportedURLError
 except (ImportError, ValueError):
@@ -13,12 +15,16 @@ except (ImportError, ValueError):
         from adapters.base import BaseAdapter
         from adapters.bilibili import BilibiliAdapter
         from adapters.weixin import WeixinAdapter
+        from adapters.weixin_article import WeixinArticleAdapter
+        from adapters.web import WebAdapter
         from adapters.youtube import YouTubeAdapter
         from models import UnsupportedURLError
     except (ImportError, ValueError):
         from base import BaseAdapter
         from bilibili import BilibiliAdapter
         from weixin import WeixinAdapter
+        from weixin_article import WeixinArticleAdapter
+        from web import WebAdapter
         from youtube import YouTubeAdapter
         from models import UnsupportedURLError
 
@@ -26,6 +32,8 @@ ADAPTERS = [
     YouTubeAdapter,
     BilibiliAdapter,
     WeixinAdapter,
+    WeixinArticleAdapter,
+    WebAdapter,  # fallback for any http(s) URL; keep last
 ]
 
 

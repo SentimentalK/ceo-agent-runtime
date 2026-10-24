@@ -122,7 +122,7 @@ class TestResolverService(unittest.TestCase):
             resp = client.post(
                 "/v1/resolve",
                 headers={"Authorization": f"Bearer {VALID_TOKEN}"},
-                json={"schema_version": 1, "url": "https://dailymotion.com/video/x7xyz"},
+                json={"schema_version": 1, "url": "ftp://dailymotion.com/video/x7xyz"},
             )
             self.assertEqual(resp.status_code, 400)
             data = resp.json()

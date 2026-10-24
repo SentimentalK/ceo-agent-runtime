@@ -16,6 +16,10 @@ Agent 用法见 `AGENT_GUIDE.md`。本文件面向开发者。
 | YouTube | yt-dlp `-J` | 官方字幕 → 自动字幕 | yt-dlp 下载音频 |
 | Bilibili | yt-dlp `-J` | 官方 / AI 字幕 | yt-dlp 下载音频 |
 | 微信视频号 | 腾讯预览接口（匿名 `shortUri`） | 无 | 复用本机 Chrome 的元宝登录 Cookie 下载媒体流 |
+| 公众号文章 | 页面 JS 变量（标题/公众号/发布时间） | `#js_content` 正文 → trafilatura → Markdown | 无 |
+| 其他网页（兜底） | trafilatura 元数据 | trafilatura 正文 → Markdown | 无 |
+
+网页抓取（`src/adapters/web.py`）每一跳重定向都会检查目标地址，拒绝内网 / 回环 / 保留地址，防止 resolve 服务被用作 SSRF。
 
 ## 目录
 

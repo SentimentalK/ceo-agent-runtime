@@ -73,7 +73,7 @@ class TestTwoCapabilities(unittest.TestCase):
     def test_resolve_unsupported_url_raises_unsupported_url_error(self):
         """Verify resolve_url() on unknown domain raises UnsupportedURLError (subclass of ResolveError)."""
         with self.assertRaises(UnsupportedURLError) as ctx:
-            resolve_url("https://vimeo.com/12345678")
+            resolve_url("ftp://vimeo.com/12345678")
 
         self.assertIsInstance(ctx.exception, ResolveError)
         self.assertIsInstance(ctx.exception, ValueError)

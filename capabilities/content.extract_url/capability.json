@@ -4,7 +4,7 @@
   "capability_id": "content.extract_url",
   "version": "0.1.0",
   "manifest_revision": 1,
-  "description": "Autonomous end-to-end extraction resolving metadata, native subtitles, and ASR fallback",
+  "description": "Extract the content of a URL: video transcripts (native subtitles or local ASR), WeChat articles, and generic web page text",
   "execution": {
     "profile": "worker",
     "entrypoints": {
