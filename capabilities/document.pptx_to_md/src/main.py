@@ -18,7 +18,7 @@ logger = logging.getLogger("pptx-to-md")
 def process_file(converter: PPTXToMarkdownConverter, input_path: str, output_path: Optional[str] = None):
     if not os.path.exists(input_path):
         logger.error(f"File not found: {input_path}")
-        return
+        return False
 
     if output_path is None:
         base_name = os.path.splitext(os.path.basename(input_path))[0]
@@ -41,8 +41,10 @@ def process_file(converter: PPTXToMarkdownConverter, input_path: str, output_pat
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(md_content)
         logger.info(f"Successfully converted: {output_path}")
+        return True
     except Exception as e:
         logger.error(f"Failed to convert {input_path}: {e}", exc_info=True)
+        return False
 
 def main():
     parser = argparse.ArgumentParser(
@@ -76,11 +78,13 @@ def main():
 
     if not all_files:
         logger.warning("No valid .pptx files found to process.")
-        return
+        sys.exit(1)
 
     logger.info(f"Total files to process: {len(all_files)}")
-    for f in all_files:
-        process_file(converter, f, args.output)
+    failed = [f for f in all_files if not process_file(converter, f, args.output)]
+    if failed:
+        logger.error(f"{len(failed)} of {len(all_files)} files failed")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

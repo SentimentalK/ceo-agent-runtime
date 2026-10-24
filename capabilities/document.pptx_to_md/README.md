@@ -17,8 +17,7 @@
 ## 快速安装
 
 ```bash
-cd pptx-to-md
-pip install -r requirements.txt
+./setup   # 创建 .venv（需要 Python 3.10-3.12）
 ```
 
 ---
@@ -28,19 +27,19 @@ pip install -r requirements.txt
 ### 1. 转换单个文件
 
 ```bash
-python3 -m src.main path/to/lecture.pptx
+./run path/to/lecture.pptx
 # 输出将默认保存在 ./output/lecture.md
 ```
 
 指定输出路径：
 ```bash
-python3 -m src.main path/to/lecture.pptx -o ./custom_output/result.md
+./run path/to/lecture.pptx -o ./custom_output/result.md
 ```
 
 ### 2. 批量处理整个目录
 
 ```bash
-python3 -m src.main ./input -o ./output
+./run ./input -o ./output
 ```
 
 ### 3. 可选参数
