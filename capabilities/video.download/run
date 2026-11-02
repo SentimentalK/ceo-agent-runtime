@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: run "<URL>" [--height <N>] [-o <OUTPUT_DIR>] [--dry-run]
+
+  --height N     Highest video height in pixels. Default: 1080. Use 720 for 720p.
+  -o DIR         Output folder. Default: current folder.
+  --dry-run      Print the yt-dlp command. Do not download.
+EOF
+    exit 2
+}
+
+HEIGHT=1080
+OUTPUT_DIR="."
+DRY_RUN=0
+URL=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --height)
+            HEIGHT="${2:-}"
+            shift 2
+            ;;
+        -o|--output-dir)
+            OUTPUT_DIR="${2:-}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -*)
+            echo "Error: unknown option: $1" >&2
+            usage
+            ;;
+        *)
+            if [[ -n "$URL" ]]; then
+                echo "Error: give one URL only." >&2
+                usage
+            fi
+            URL="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$URL" ]]; then
+    echo "Error: give a URL." >&2
+    usage
+fi
+
+if ! [[ "$HEIGHT" =~ ^[0-9]+$ ]]; then
+    echo "Error: --height must be a number, for example 1080 or 720." >&2
+    exit 2
+fi
+
+YT_DLP="${YT_DLP_PATH:-yt-dlp}"
+
+# Video: AVC (H.264) stream at or below the height. Audio: best audio stream.
+# Merge with stream copy into MP4. The audio is not converted.
+# Fallback: one file that already has video and audio at or below the height.
+FORMAT="bestvideo[height<=${HEIGHT}][vcodec^=avc1]+bestaudio/best[height<=${HEIGHT}]"
+TEMPLATE="%(title)s [%(id)s] %(height)sp.%(ext)s"
+
+CMD=(
+    "$YT_DLP"
+    -f "$FORMAT"
+    --merge-output-format mp4
+    -o "$OUTPUT_DIR/$TEMPLATE"
+    "$URL"
+)
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf '%q ' "${CMD[@]}"
+    printf '\n'
+    exit 0
+fi
+
+if ! command -v "$YT_DLP" >/dev/null 2>&1 && [[ ! -x "$YT_DLP" ]]; then
+    echo "Error: yt-dlp not found. Install it, or set YT_DLP_PATH." >&2
+    exit 3
+fi
+
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "Error: ffmpeg not found in PATH. It merges video and audio." >&2
+    exit 3
+fi
+
+mkdir -p "$OUTPUT_DIR"
+"${CMD[@]}"
