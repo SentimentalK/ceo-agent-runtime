@@ -10,6 +10,7 @@ This repository contains reusable capabilities. The user and CEO agents use them
 | `video.generate_subtitles` | Make SRT and VTT subtitles for a local video file. Put the subtitles into an MP4. | `capabilities/video.generate_subtitles/AGENT_GUIDE.md` |
 | `document.pptx_to_md` | Convert a PPTX file to Markdown, with OCR of images. | `capabilities/document.pptx_to_md/AGENT_GUIDE.md` |
 | `discord.channel` | Read messages in a Discord channel. Send a reply. Add a reaction. Delete a message. | `capabilities/discord.channel/AGENT_GUIDE.md` |
+| `video.download` | Download the video file (MP4) of a URL. Up to 1080p by default. Audio is not converted. | `capabilities/video.download/AGENT_GUIDE.md` |
 
 ## Rules
 
