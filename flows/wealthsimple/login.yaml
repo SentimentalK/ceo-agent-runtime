@@ -1,0 +1,29 @@
+# Log in to Wealthsimple in the persistent "wealthsimple" Chrome profile.
+# Credentials come from Infisical at run time. The AI never sees them.
+# First run: use --keep-open. If Wealthsimple asks for a 2FA code, type it in the browser window.
+name: wealthsimple.login
+profile: wealthsimple
+secrets:
+  provider: infisical
+  project_id: a59a14bf-3e6d-4f80-98b2-accea5cc268f   # lifeos-sensitive
+  env: prod
+  path: /automation/wealthsimple
+steps:
+  - goto: https://my.wealthsimple.com/app/login
+  # Already logged in from a previous run? The app redirects away from /login.
+  - wait_for: {any: ['role=textbox[name="Email"]', 'role=link[name=/home/i]'], timeout: 30}
+  - wait_for: {target: 'role=textbox[name="Email"]', timeout: 5}
+  - fill: {target: 'role=textbox[name="Email"]', value: "${secret:WS_EMAIL}", secret: true}
+  - fill: {target: 'role=textbox[name="Password"]', value: "${secret:WS_PASSWORD}", secret: true}
+  - click: role=button[name="Log in"]
+  # Next page: a 2FA code prompt or the app. Names below are guesses until the first run.
+  - wait_for:
+      any:
+        - 'role=textbox[name=/code/i]'
+        - 'role=link[name=/home/i]'
+      timeout: 60
+  - snapshot: after-login
+  # 2FA: no code source is set up yet. The user types the code in the window. 300 s.
+  - wait_for: {if_visible: 'role=textbox[name=/code/i]', target: 'role=link[name=/home/i]', timeout: 300}
+  - snapshot: home
+  - screenshot: logged-in

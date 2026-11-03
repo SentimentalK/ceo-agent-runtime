@@ -5,7 +5,7 @@ name: cibc.download_estatements
 profile: cibc
 vars:
   card: CIBC MasterCard        # link text on the Home page
-  out: output/cibc
+  out: output/statements
   max: 100                     # newest N statements to look at
 steps:
   - goto: https://www.cibconline.cibc.com/ebm-resources/online-banking/accounts/client/index.html#/?channel=web

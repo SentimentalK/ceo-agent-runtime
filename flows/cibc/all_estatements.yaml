@@ -5,8 +5,8 @@
 # Run: capabilities/browser.run_flow/run run flows/cibc/all_estatements.yaml
 name: cibc.all_estatements
 vars:
-  out: output/cibc
-  remote: "onedrive:10_个人档案/财税/CIBC eStatements"
+  out: output/statements
+  remote: "onedrive:10_个人档案/财税/eStatements"
 steps:
   - shell: {cmd: 'mkdir -p "${var:out}" && rclone mkdir "${var:remote}" && rclone copy "${var:remote}" "${var:out}" && ls "${var:out}" | tail -3', name: before}
   - include: login.yaml
