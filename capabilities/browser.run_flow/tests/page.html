@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>Flow Test Page</title></head><body>
+<h1>Login</h1>
+<form onsubmit="event.preventDefault(); document.getElementById('out').textContent='hello '+document.getElementById('u').value; document.getElementById('done').style.display='block';">
+<label for="u">Username</label><input id="u" name="u">
+<label for="p">Password</label><input id="p" name="p" type="password">
+<button type="submit">Sign on</button>
+</form>
+<p id="out"></p>
+<div id="done" style="display:none"><a href="data:text/plain,statement-content" download="stmt.txt">Download statement</a></div>
+<ul><li class="acct">Chequing 123.45</li><li class="acct">Savings 678.90</li></ul>
+</body></html>

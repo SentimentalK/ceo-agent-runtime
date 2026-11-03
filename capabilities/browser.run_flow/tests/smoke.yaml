@@ -1,0 +1,20 @@
+name: smoke
+profile: test
+headless: true
+vars:
+  user: alice
+steps:
+  - goto: ${var:page_url}
+  - assert: {title: Flow Test Page}
+  - fill: {target: label=Username, value: "${var:user}"}
+  - fill: {target: "#p", value: "s3cret", secret: true}
+  - click: role=button[name="Sign on"]
+  - wait_for: {target: "#done"}
+  - assert: {target: "#out", text: hello alice}
+  - extract: {name: accounts, target: ".acct", all: true}
+  - extract: {name: chequing, target: ".acct", regex: "([0-9.]+)"}
+  - download: {click: "text=Download statement", save_as: statement.txt}
+  - click: {target: "text=does not exist", optional: true, timeout: 1}
+  - click: {target: "text=skipped", if_visible: "#nope"}
+  - screenshot: end
+  - snapshot: end

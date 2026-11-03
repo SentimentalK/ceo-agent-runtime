@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Creates the venv and installs Playwright. Uses the system Google Chrome.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+command -v uv >/dev/null || { echo "error: uv is not installed (https://docs.astral.sh/uv/)" >&2; exit 2; }
+command -v google-chrome >/dev/null || { echo "error: google-chrome is not in PATH" >&2; exit 2; }
+command -v infisical >/dev/null || echo "warning: infisical CLI not found; \${secret:...} will not work" >&2
+uv venv -q .venv --python 3.14
+uv pip install -q --python .venv/bin/python playwright pyyaml
+.venv/bin/python -c "import playwright, yaml; print('ok')"

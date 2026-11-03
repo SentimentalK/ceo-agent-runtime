@@ -11,6 +11,7 @@ This repository contains reusable capabilities. The user and CEO agents use them
 | `document.pptx_to_md` | Convert a PPTX file to Markdown, with OCR of images. | `capabilities/document.pptx_to_md/AGENT_GUIDE.md` |
 | `discord.channel` | Read messages in a Discord channel. Send a reply. Add a reaction. Delete a message. | `capabilities/discord.channel/AGENT_GUIDE.md` |
 | `video.download` | Download the video file (MP4) of a URL. Up to 1080p by default. Audio is not converted. | `capabilities/video.download/AGENT_GUIDE.md` |
+| `browser.run_flow` | Run a YAML list of browser steps in a real Chrome profile: sign on, click, fill, download, extract. Site recipes are in `flows/<site>/`. | `capabilities/browser.run_flow/AGENT_GUIDE.md` |
 
 ## Rules
 
@@ -27,3 +28,4 @@ This repository contains reusable capabilities. The user and CEO agents use them
 6. Put temporary files in `temp/<task-name>/` at the repository root. When the task is complete, delete your folder. Do not delete other folders in `temp/`.
 7. Keep credentials in `.env` at the repository root. Do not commit credentials.
 8. Write guides in ASD-STE100 style: short sentences, one instruction in each sentence, imperative verbs.
+9. Put browser recipes in `flows/<site>/<task>.yaml`. Reference credentials as `${secret:KEY}` from Infisical. Do not put credential values in a flow.

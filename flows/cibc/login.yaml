@@ -1,0 +1,33 @@
+# Sign on to CIBC Online Banking in the persistent "cibc" Chrome profile.
+# Credentials come from Infisical at run time. The AI never sees them.
+# First run: use --keep-open. If CIBC asks for a 2FA code, type it in the browser window.
+name: cibc.login
+profile: cibc
+secrets:
+  provider: infisical
+  project_id: a59a14bf-3e6d-4f80-98b2-accea5cc268f   # lifeos-sensitive
+  env: prod
+  path: /automation/cibc
+steps:
+  - goto: https://www.cibconline.cibc.com/ebm-resources/public/banking/cibc/client/web/index.html#/signon
+  - click: {target: 'role=button[name="Accept all cookies"]', optional: true, timeout: 5}
+  # Already signed on from a previous run? Then stop here.
+  - wait_for: {any: ['role=textbox[name="Card number"]', 'role=heading[name=/my accounts/i]'], timeout: 30}
+  - wait_for: {target: 'role=textbox[name="Card number"]', timeout: 5}
+  - fill: {target: 'role=textbox[name="Card number"]', value: "${secret:CIBC_CARD_NUMBER}", secret: true}
+  - check: {target: 'role=checkbox[name="Remember my card"]', optional: true, timeout: 3}
+  - click: role=button[name="Continue"]
+  - wait_for: {target: 'role=textbox[name=/password/i]', timeout: 30}
+  - snapshot: password-page
+  - fill: {target: 'role=textbox[name=/password/i]', value: "${secret:CIBC_PASSWORD}", secret: true}
+  - click: role=button[name=/sign on/i]
+  # Either the account summary or a 2FA challenge appears. 300 s leaves time to type a code by hand.
+  - wait_for:
+      any:
+        - role=heading[name=/my accounts/i]
+        - role=textbox[name=/code/i]
+      timeout: 60
+  - snapshot: after-sign-on
+  - wait_for: {target: 'role=heading[name=/my accounts/i]', timeout: 300}
+  - assert: {target: 'role=heading[name=/my accounts/i]'}
+  - screenshot: signed-on
