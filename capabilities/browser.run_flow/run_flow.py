@@ -470,7 +470,16 @@ class Runner:
             self._download_one(self._t(arg["click"]), save_dir, self.secrets.resolve(arg.get("save_as")), step)
             return
         loc = self._t(arg["click"])
-        loc.first.wait_for(state="visible", timeout=self._ms(step))
+        if arg.get("allow_none"):
+            try:
+                loc.first.wait_for(state="visible", timeout=min(self._ms(step), 10_000))
+            except PWTimeout:
+                self.log("  0 matched (allow_none)")
+                self.extracted.setdefault("_downloads", {})[str(step.get("name", save_dir.name))] = {
+                    "matched": 0, "downloaded": 0, "skipped": 0}
+                return
+        else:
+            loc.first.wait_for(state="visible", timeout=self._ms(step))
         count = min(loc.count(), int(arg.get("max", 100)))
         ext = arg.get("ext", ".pdf")
         skipped = 0
@@ -488,11 +497,57 @@ class Runner:
             "matched": count, "downloaded": count - skipped, "skipped": skipped}
 
     def _download_one(self, loc: Locator, save_dir: Path, name: str | None, step: dict) -> None:
-        with self.page.expect_download(timeout=self._ms(step, 120)) as dl_info:
+        """Click and save the result. Handles a download event, a PDF that opens in a new tab
+        (fetched with the browser session), and a new tab that itself starts a download."""
+        ctx = self.page.context
+        got: dict[str, Any] = {}
+        on_dl = lambda d: got.setdefault("download", d)
+        on_pg = lambda pg: got.setdefault("page", pg)
+        self.page.on("download", on_dl)
+        ctx.on("page", on_pg)
+        timeout_s = self._ms(step, 120) / 1000
+        try:
             loc.click(timeout=self._ms(step))
-        dl = dl_info.value
-        dest = save_dir / (name or dl.suggested_filename)
-        dl.save_as(str(dest))
+            deadline = time.time() + timeout_s
+            while not got and time.time() < deadline:
+                self.page.wait_for_timeout(200)
+            if "download" in got:
+                dl = got["download"]
+                dest = save_dir / (name or dl.suggested_filename)
+                dl.save_as(str(dest))
+            elif "page" in got:
+                popup = got["page"]
+                popup_dl: dict[str, Any] = {}
+                popup.on("download", lambda d: popup_dl.setdefault("d", d))
+                try:
+                    popup.wait_for_load_state("load", timeout=30_000)
+                except PWError:
+                    pass
+                deadline = time.time() + 5
+                while "d" not in popup_dl and time.time() < deadline and popup.url in ("", "about:blank"):
+                    self.page.wait_for_timeout(200)
+                if "d" in popup_dl:
+                    dl = popup_dl["d"]
+                    dest = save_dir / (name or dl.suggested_filename)
+                    dl.save_as(str(dest))
+                else:
+                    url = popup.url
+                    resp = self.page.request.get(url, timeout=self._ms(step, 120))
+                    body = resp.body()
+                    ctype = resp.headers.get("content-type", "")
+                    if not (body[:5] == b"%PDF-" or "pdf" in ctype):
+                        raise FlowError(f"new tab is not a PDF (content-type {ctype!r}): {self.secrets.redact(url)[:100]}")
+                    dest = save_dir / (name or (url.split("?")[0].rstrip("/").split("/")[-1] or "download.pdf"))
+                    dest.write_bytes(body)
+                try:
+                    popup.close()
+                except PWError:
+                    pass
+            else:
+                raise FlowError(f"no download and no new tab within {timeout_s:.0f}s after the click")
+        finally:
+            self.page.remove_listener("download", on_dl)
+            ctx.remove_listener("page", on_pg)
         self.downloads.append(str(dest))
         self.log(f"  saved {dest}")
 

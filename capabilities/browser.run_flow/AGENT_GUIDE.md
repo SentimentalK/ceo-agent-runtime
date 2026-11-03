@@ -100,7 +100,7 @@ One action per step. Options `optional`, `timeout` (seconds), `retry`, `if_visib
 | `wait_for_code` | `{source: file, path, pattern, fill, submit}` waits for a one-time code in a file, fills it, submits. The file is deleted after use. |
 | `assert` | target, or `{target, text, url, title}` |
 | `extract` | `{name, target, attr: text\|value\|href\|..., all, regex}` saves into `extracted` |
-| `download` | target, or `{click, save_as, dir, skip_existing}`. With `each: true` it clicks every match (up to `max`) and names each file from `save_as` with `{label}`, `{date}` (last "Month D, YYYY" in the element text as YYYY-MM-DD), `{index}`. Existing files are skipped. |
+| `download` | target, or `{click, save_as, dir, skip_existing}`. With `each: true` it clicks every match (up to `max`) and names each file from `save_as` with `{label}`, `{date}` (last "Month D, YYYY" in the element text as YYYY-MM-DD), `{index}`. Existing files are skipped. `allow_none: true` makes zero matches a success. |
 | `screenshot` | name |
 | `snapshot` | name. Writes `<name>.snapshot.yaml` with the accessibility tree. |
 | `evaluate` | JS string, or `{js, name}` |

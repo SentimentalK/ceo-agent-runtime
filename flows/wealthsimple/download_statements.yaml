@@ -1,0 +1,25 @@
+# Download the monthly statement PDFs of one Wealthsimple account into a flat folder.
+# File name: "Wealthsimple <account> - eStatement <document date>.pdf". Files that exist are skipped.
+# Needs a logged-in browser: include this flow after login.yaml, or use `attach`.
+# The Documents page lists each statement as a button named
+# "PDF <Account> <Month> Monthly Statement <Account> <Month D, YYYY>".
+name: wealthsimple.download_statements
+profile: wealthsimple
+vars:
+  account: Credit card         # text before "Monthly Statement" in the button name
+  out: output/statements
+  max: 100
+steps:
+  - goto: https://my.wealthsimple.com/app/docs
+  - wait_for: {target: 'role=heading[name="Documents"]', timeout: 60}
+  - click: {target: 'role=button[name="Statements"]', timeout: 30}
+  - sleep: 3
+  - download:
+      name: ${var:account}
+      click: {role: button, name: "/^PDF ${var:account} .*Monthly Statement/"}
+      each: true
+      allow_none: true           # a new account has no statement yet
+      max: ${var:max}
+      dir: ${var:out}
+      save_as: "Wealthsimple ${var:account} - eStatement {date}.pdf"
+      timeout: 120

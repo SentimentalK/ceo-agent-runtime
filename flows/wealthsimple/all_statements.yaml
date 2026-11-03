@@ -1,0 +1,12 @@
+# Fetch the Wealthsimple credit card statements that OneDrive does not have yet.
+# Same pattern as flows/cibc/all_estatements.yaml. Same OneDrive folder.
+# Run: capabilities/browser.run_flow/run run flows/wealthsimple/all_statements.yaml
+name: wealthsimple.all_statements
+vars:
+  out: output/statements
+  remote: "onedrive:10_个人档案/财税/eStatements"
+steps:
+  - shell: {cmd: 'mkdir -p "${var:out}" && rclone mkdir "${var:remote}" && rclone copy "${var:remote}" "${var:out}"', name: before}
+  - include: login.yaml
+  - include: {flow: download_statements.yaml, vars: {account: Credit card}}
+  - shell: {cmd: 'rclone copy "${var:out}" "${var:remote}" && rclone lsf "${var:remote}" | wc -l', name: remote_count}
