@@ -6,6 +6,8 @@
 <button type="submit">Sign on</button>
 </form>
 <p id="out"></p>
-<div id="done" style="display:none"><a href="data:text/plain,statement-content" download="stmt.txt">Download statement</a></div>
+<div id="done" style="display:none"><a href="data:text/plain,statement-content" download="stmt.txt">Download statement</a>
+<ul id="stmts"><li><button onclick="dl(this)">September 10 to October 9, 2026</button></li><li><button onclick="dl(this)">August 10 to September 9, 2026</button></li></ul>
+<script>function dl(b){const a=document.createElement("a");a.href="data:text/plain,"+encodeURIComponent(b.textContent);a.download="x.txt";a.click();}</script></div>
 <ul><li class="acct">Chequing 123.45</li><li class="acct">Savings 678.90</li></ul>
 </body></html>

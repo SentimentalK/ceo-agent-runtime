@@ -37,11 +37,12 @@ PROFILES_DIR = Path(
     os.environ.get("BROWSER_FLOW_PROFILES", Path.home() / ".local/share/browser.run_flow/profiles")
 )
 ACTIONS = {
-    "goto", "click", "fill", "type", "press", "select", "check", "wait_for", "wait_for_code",
-    "assert", "extract", "download", "screenshot", "snapshot", "evaluate", "sleep", "log",
+    "include", "goto", "click", "fill", "type", "press", "select", "check", "wait_for", "wait_for_code",
+    "assert", "extract", "download", "screenshot", "snapshot", "evaluate", "sleep", "log", "shell",
 }
 STEP_OPTIONS = {"name", "optional", "timeout", "if_visible", "if_hidden", "retry"}
 DEFAULT_TIMEOUT = 30.0
+DEFAULT_CDP_PORT = 9222
 
 
 class FlowError(Exception):
@@ -100,7 +101,7 @@ class Secrets:
                 if kind == "var":
                     if key not in self.vars:
                         raise FlowError(f"variable {key} is not set (use --var {key}=...)")
-                    return self.vars[key]
+                    return str(self.vars[key])
                 return os.environ.get(key, "")
             return self.PATTERN.sub(sub, value)
         if isinstance(value, dict):
@@ -451,15 +452,46 @@ class Runner:
         self.log(f"  {name} = {self.secrets.redact(json.dumps(self.extracted[name], ensure_ascii=False))[:300]}")
 
     def do_download(self, arg, step):
+        """download: target | {click, save_as, dir, each, max, skip_existing}
+
+        each: true -> click every element that matches `click` (up to `max`) and name each
+        file after the element's text plus `ext` (default .pdf). With skip_existing (default
+        true) a file that already exists is not downloaded again.
+        """
         if isinstance(arg, str):
             arg = {"click": arg}
         save_dir = Path(self.secrets.resolve(arg.get("dir", str(self.out / "downloads"))))
         save_dir.mkdir(parents=True, exist_ok=True)
+        if not arg.get("each"):
+            dest = save_dir / (self.secrets.resolve(arg.get("save_as")) or "")
+            if arg.get("save_as") and arg.get("skip_existing") and dest.exists():
+                self.log(f"  exists, skipped {dest}")
+                return
+            self._download_one(self._t(arg["click"]), save_dir, self.secrets.resolve(arg.get("save_as")), step)
+            return
+        loc = self._t(arg["click"])
+        loc.first.wait_for(state="visible", timeout=self._ms(step))
+        count = min(loc.count(), int(arg.get("max", 100)))
+        ext = arg.get("ext", ".pdf")
+        skipped = 0
+        template = self.secrets.resolve(arg.get("save_as")) or "{label}" + ext
+        for i in range(count):
+            item = loc.nth(i)
+            label = item.inner_text(timeout=self._ms(step, 10)).strip().splitlines()[0]
+            name = template.format(label=_slug(label), date=_last_date(label) or _slug(label), index=i + 1)
+            if arg.get("skip_existing", True) and (save_dir / name).exists():
+                skipped += 1
+                continue
+            self._download_one(item, save_dir, name, step)
+        self.log(f"  {count} matched, {count - skipped} downloaded, {skipped} already present")
+        self.extracted.setdefault("_downloads", {})[str(step.get("name", save_dir.name))] = {
+            "matched": count, "downloaded": count - skipped, "skipped": skipped}
+
+    def _download_one(self, loc: Locator, save_dir: Path, name: str | None, step: dict) -> None:
         with self.page.expect_download(timeout=self._ms(step, 120)) as dl_info:
-            self._t(arg["click"]).click(timeout=self._ms(step))
+            loc.click(timeout=self._ms(step))
         dl = dl_info.value
-        name = self.secrets.resolve(arg.get("save_as")) or dl.suggested_filename
-        dest = save_dir / name
+        dest = save_dir / (name or dl.suggested_filename)
         dl.save_as(str(dest))
         self.downloads.append(str(dest))
         self.log(f"  saved {dest}")
@@ -479,6 +511,18 @@ class Runner:
 
     def do_sleep(self, arg, step):
         time.sleep(float(arg))
+
+    def do_shell(self, arg, step):
+        """shell: run a command in the repository root. Fails on a non-zero exit code."""
+        cmd = arg if isinstance(arg, str) else arg["cmd"]
+        proc = subprocess.run(cmd, shell=True, cwd=REPO, capture_output=True, text=True,
+                              timeout=float(step.get("timeout", 600)))
+        for line in (proc.stdout + proc.stderr).strip().splitlines()[-20:]:
+            self.log("  | " + self.secrets.redact(line))
+        if proc.returncode != 0:
+            raise FlowError(f"shell exited {proc.returncode}: {cmd[:120]}")
+        if isinstance(arg, dict) and "name" in arg:
+            self.extracted[arg["name"]] = proc.stdout.strip()
 
     def do_log(self, arg, step):
         self.log(f"  {self.secrets.redact(str(arg))}")
@@ -501,6 +545,20 @@ def _split_step(step: dict) -> tuple[str, Any]:
     return keys[0], arg
 
 
+MONTHS = {m: i for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"], 1)}
+DATE_RE = re.compile(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}),?\s+(\d{4})", re.I)
+
+
+def _last_date(text: str) -> str | None:
+    """Last 'Month D, YYYY' in text as YYYY-MM-DD, e.g. a statement period's end date."""
+    found = DATE_RE.findall(text)
+    if not found:
+        return None
+    month, day, year = found[-1]
+    return f"{year}-{MONTHS[month.lower()]:02d}-{int(day):02d}"
+
+
 def _slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", s).strip("-")[:60] or "x"
 
@@ -510,19 +568,44 @@ def _short_err(e: Exception) -> str:
     return f"{e.__class__.__name__}: {msg[:300]}"
 
 
-def load_flow(path: Path) -> dict:
+def load_flow(path: Path, _depth: int = 0) -> dict:
     try:
         data = yaml.safe_load(path.read_text())
     except yaml.YAMLError as e:
         raise FlowError(f"{path}: YAML error: {e}\nHint: inside {{...}} quote targets that contain [ or ], e.g. target: 'role=button[name=\"OK\"]'")
     if not isinstance(data, dict) or not isinstance(data.get("steps"), list):
         raise FlowError(f"{path}: flow must be a mapping with a 'steps' list")
+    if _depth > 5:
+        raise FlowError(f"{path}: include nesting too deep")
+    steps: list = []
+    for raw in data["steps"]:
+        if isinstance(raw, dict) and "include" in raw:
+            inc = raw["include"]
+            if isinstance(inc, str):
+                inc = {"flow": inc}
+            sub_path = (path.parent / inc["flow"]).resolve()
+            sub = load_flow(sub_path, _depth + 1)
+            for key in ("secrets", "profile"):
+                if key in sub and key not in data:
+                    data[key] = sub[key]
+            data["vars"] = {**(sub.get("vars") or {}), **(data.get("vars") or {})}
+            sub_steps = sub["steps"]
+            if inc.get("vars"):  # fix these variables for the included steps only
+                text = yaml.safe_dump(sub_steps, allow_unicode=True)
+                for k, v in inc["vars"].items():
+                    text = text.replace("${var:%s}" % k, str(v))
+                sub_steps = yaml.safe_load(text)
+            steps += sub_steps
+        else:
+            steps.append(raw)
+    data["steps"] = steps
     return data
 
 
-def launch(p, profile: str, headless: bool, downloads_dir: Path | None = None):
+def launch(p, profile: str, headless: bool, cdp_port: int = 0):
     user_dir = PROFILES_DIR / profile
     user_dir.mkdir(parents=True, exist_ok=True)
+    extra = [f"--remote-debugging-port={cdp_port}"] if cdp_port else []
     return p.chromium.launch_persistent_context(
         str(user_dir),
         channel="chrome",
@@ -531,7 +614,7 @@ def launch(p, profile: str, headless: bool, downloads_dir: Path | None = None):
         no_viewport=not headless,
         accept_downloads=True,
         ignore_default_args=["--enable-automation"],
-        args=["--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"],
+        args=["--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check", *extra],
         locale="en-CA",
         timezone_id="America/Toronto",
     )
@@ -576,7 +659,10 @@ def cmd_run(args) -> int:
                               "steps_total": len(flow["steps"]), "steps_run": 0}
     headless = bool(args.headless or flow.get("headless"))
     with sync_playwright() as p:
-        context = launch(p, profile, headless)
+        cdp_port = args.cdp_port if args.cdp_port is not None else (DEFAULT_CDP_PORT if args.keep_open or args.pause_on_fail else 0)
+        if cdp_port:
+            log(f"CDP port {cdp_port}: use `run attach --cdp {cdp_port} ...` to drive this browser")
+        context = launch(p, profile, headless, cdp_port)
         page = context.pages[0] if context.pages else context.new_page()
         page.set_default_timeout(DEFAULT_TIMEOUT * 1000)
         runner = Runner(page, secrets, out, log)
@@ -597,7 +683,7 @@ def cmd_run(args) -> int:
                         raise
                 result["steps_run"] = i
             result["ok"] = True
-        except (PWError, FlowError, AssertionError) as e:
+        except (PWError, FlowError, AssertionError, Exception) as e:
             idx = result["steps_run"] + 1
             failed = {"index": idx, "step": secrets.redact(flow["steps"][idx - 1]) if idx <= len(flow["steps"]) else None,
                       "error": secrets.redact(_short_err(e))}
@@ -645,16 +731,85 @@ def cmd_snapshot(args) -> int:
 
 def cmd_open(args) -> int:
     with sync_playwright() as p:
-        context = launch(p, args.profile, False)
+        context = launch(p, args.profile, False, args.cdp_port)
         page = context.pages[0] if context.pages else context.new_page()
         if args.url:
             page.goto(args.url, timeout=60_000)
+        print(f"CDP port {args.cdp_port}: use `run attach --cdp {args.cdp_port} ...`", file=sys.stderr)
         wait_until_closed(context, lambda m: print(m, file=sys.stderr))
         try:
             context.close()
         except PWError:
             pass
     return 0
+
+
+def cmd_attach(args) -> int:
+    """Run steps against a browser that `run --keep-open` or `open` started (CDP)."""
+    out = Path(args.out).resolve() if args.out else REPO / "temp" / "browser.run_flow" / "attach"
+    out.mkdir(parents=True, exist_ok=True)
+    steps: list = []
+    flow: dict = {}
+    if args.flow:
+        flow = load_flow(Path(args.flow))
+        steps += flow["steps"]
+    for raw in args.step or []:
+        try:
+            st = yaml.safe_load(raw)
+        except yaml.YAMLError as e:
+            raise FlowError(f"--step is not valid YAML: {raw!r}: {e}\nHint: quote targets that contain [ ] inside {{...}}")
+        if isinstance(st, list):
+            steps += st
+        else:
+            steps.append(st)
+    variables = dict(flow.get("vars") or {})
+    for kv in args.var or []:
+        k, _, v = kv.partition("=")
+        variables[k] = v
+    secrets = Secrets(flow.get("secrets"), variables)
+
+    def log(msg: str) -> None:
+        print(f"{dt.datetime.now().strftime('%H:%M:%S')} {msg}", file=sys.stderr, flush=True)
+
+    result: dict[str, Any] = {"ok": False, "steps_total": len(steps), "steps_run": 0}
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
+        except PWError as e:
+            raise FlowError(f"cannot attach to CDP port {args.cdp}: {_short_err(e)}. Start the browser with `run ... --keep-open` or `run open`.")
+        context = browser.contexts[0]
+        pages = [pg for pg in context.pages if not pg.url.startswith(("chrome://", "devtools://"))] or context.pages
+        page = pages[-1]
+        page.set_default_timeout(DEFAULT_TIMEOUT * 1000)
+        runner = Runner(page, secrets, out, log)
+        try:
+            for i, raw in enumerate(steps, start=1):
+                step = secrets.resolve(raw)
+                try:
+                    runner.run_step(i, step)
+                except (PWError, FlowError, AssertionError) as e:
+                    if step.get("optional"):
+                        log(f"  optional step failed, continuing: {_short_err(e)}")
+                    else:
+                        raise
+                result["steps_run"] = i
+            result["ok"] = True
+        except (PWError, FlowError, AssertionError) as e:
+            idx = result["steps_run"] + 1
+            result["failed_step"] = {"index": idx, "step": secrets.redact(steps[idx - 1]), "error": secrets.redact(_short_err(e)),
+                                     "artifacts": runner.dump_failure(idx)}
+            log(f"FAILED at step {idx}: {result['failed_step']['error']}")
+        finally:
+            result["url"] = secrets.redact(page.url)
+            result["title"] = secrets.redact(page.title())
+            result["extracted"] = secrets.redact(runner.extracted)
+            result["downloads"] = runner.downloads
+            if args.snapshot or not steps:
+                result["snapshot"] = runner.snapshot("page")
+                print(Path(result["snapshot"]).read_text())
+            browser.close()  # detaches only; the browser keeps running
+    print(json.dumps(result, indent=2, ensure_ascii=False), file=sys.stderr if (args.snapshot or not steps) else sys.stdout)
+    return 0 if result["ok"] else 1
 
 
 def main(argv=None) -> int:
@@ -671,7 +826,17 @@ def main(argv=None) -> int:
     r.add_argument("--out", help="artifacts folder (default temp/browser.run_flow/<flow>/<time>)")
     r.add_argument("--var", action="append", metavar="KEY=VALUE")
     r.add_argument("--from-step", type=int, metavar="N", help="skip steps before N")
+    r.add_argument("--cdp-port", type=int, help=f"expose a CDP port for `attach` (default {DEFAULT_CDP_PORT} with --keep-open/--pause-on-fail)")
     r.set_defaults(fn=cmd_run)
+
+    a = sub.add_parser("attach", help="run steps in the browser that `run --keep-open` or `open` started")
+    a.add_argument("flow", nargs="?", help="flow YAML (steps, secrets, vars)")
+    a.add_argument("--step", action="append", metavar="YAML", help="one step as inline YAML, e.g. 'click: role=link[name=\"Statements\"]'. Can repeat.")
+    a.add_argument("--cdp", type=int, default=DEFAULT_CDP_PORT)
+    a.add_argument("--snapshot", action="store_true", help="print the accessibility tree after the steps")
+    a.add_argument("--var", action="append", metavar="KEY=VALUE")
+    a.add_argument("--out")
+    a.set_defaults(fn=cmd_attach)
 
     s = sub.add_parser("snapshot", help="print the accessibility tree of a URL")
     s.add_argument("url", nargs="?")
@@ -684,6 +849,7 @@ def main(argv=None) -> int:
     o = sub.add_parser("open", help="open a headed browser in a profile and wait until it is closed")
     o.add_argument("url", nargs="?")
     o.add_argument("--profile", default="default")
+    o.add_argument("--cdp-port", type=int, default=DEFAULT_CDP_PORT)
     o.set_defaults(fn=cmd_open)
 
     args = ap.parse_args(argv)

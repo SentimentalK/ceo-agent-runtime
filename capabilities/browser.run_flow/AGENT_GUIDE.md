@@ -16,11 +16,21 @@ Needs `uv`, `google-chrome`, and the `infisical` CLI (logged in) in `PATH`.
 capabilities/browser.run_flow/run run flows/<site>/<task>.yaml [options]
 capabilities/browser.run_flow/run snapshot <URL> [--profile NAME] [--headless]
 capabilities/browser.run_flow/run open <URL> --profile NAME
+capabilities/browser.run_flow/run attach [flow.yaml] [--step '<yaml>' ...] [--snapshot] [--cdp 9222]
 ```
 
 - `run`: runs the flow. Prints a JSON result to stdout. Writes a log and artifacts to `temp/browser.run_flow/<flow>/<time>/`.
 - `snapshot`: opens the URL and prints the accessibility tree of the page. Use it to find targets before you write a flow.
 - `open`: opens a headed browser in a profile and waits until you close the window. Use it for a one-time manual sign-on.
+- `attach`: runs steps in a browser that `run --keep-open`, `run --pause-on-fail`, or `open` started. The browser stays open after `attach` ends. Use it to explore a signed-on site one step at a time. Without steps, or with `--snapshot`, it prints the accessibility tree of the current page.
+
+## Explore a signed-on site
+
+1. Sign on with the window kept open: `run run flows/<site>/login.yaml --keep-open`. This exposes CDP port 9222.
+2. Look at the page: `run attach --snapshot`.
+3. Run one step: `run attach --step 'click: role=link[name="Statements"]' --snapshot`.
+4. Repeat until the task works. Then put the steps into `flows/<site>/<task>.yaml`.
+5. Run the new flow with `run attach flows/<site>/<task>.yaml` in the same browser. It does not sign on again.
 
 ## Options for `run`
 
@@ -30,6 +40,7 @@ capabilities/browser.run_flow/run open <URL> --profile NAME
 - `--pause-on-fail`: keep the browser open after a failed step. The user can then finish the step by hand.
 - `--var KEY=VALUE`: set `${var:KEY}`. Can repeat.
 - `--from-step N`: skip steps before N.
+- `--cdp-port N`: port for `attach`. Default: 9222 when `--keep-open` or `--pause-on-fail` is set, else none.
 - `--out DIR`: artifacts folder.
 
 ## Flow file
@@ -89,12 +100,27 @@ One action per step. Options `optional`, `timeout` (seconds), `retry`, `if_visib
 | `wait_for_code` | `{source: file, path, pattern, fill, submit}` waits for a one-time code in a file, fills it, submits. The file is deleted after use. |
 | `assert` | target, or `{target, text, url, title}` |
 | `extract` | `{name, target, attr: text\|value\|href\|..., all, regex}` saves into `extracted` |
-| `download` | target, or `{click, save_as, dir}` |
+| `download` | target, or `{click, save_as, dir, skip_existing}`. With `each: true` it clicks every match (up to `max`) and names each file from `save_as` with `{label}`, `{date}` (last "Month D, YYYY" in the element text as YYYY-MM-DD), `{index}`. Existing files are skipped. |
 | `screenshot` | name |
 | `snapshot` | name. Writes `<name>.snapshot.yaml` with the accessibility tree. |
 | `evaluate` | JS string, or `{js, name}` |
 | `sleep` | seconds |
 | `log` | text |
+| `shell` | command string, or `{cmd, name}`. Runs in the repository root. Fails on a non-zero exit. |
+| `include` | `path.yaml` or `{flow: path.yaml, vars: {k: v}}`. Inserts the steps of another flow (path relative to this file). `vars` fix `${var:k}` for the included steps only. The first included `secrets` and `profile` apply when the flow has none. |
+
+## Compose flows
+
+A task flow calls other flows with `include`. Example `flows/cibc/all_estatements.yaml`:
+
+```yaml
+steps:
+  - shell: rclone copy "onedrive:Folder" output/cibc
+  - include: login.yaml
+  - include: {flow: download_estatements.yaml, vars: {card: CIBC MasterCard}}
+  - include: {flow: download_estatements.yaml, vars: {card: CIBC VISA}}
+  - shell: rclone copy output/cibc "onedrive:Folder"
+```
 
 ## Output
 
@@ -110,6 +136,8 @@ One action per step. Options `optional`, `timeout` (seconds), `retry`, `if_visib
 4. When a step fails, read `fail-step<N>.snapshot.yaml` in the artifacts folder. Fix the target. Run again with `--from-step N` if the browser state allows it.
 5. If a flow needs a one-time code and no code source is set up, run with `--keep-open` and ask the user to type the code in the browser window.
 6. Delete the `temp/browser.run_flow/` artifacts when the task is complete.
+7. Do not use `wait_for: {load: networkidle}` on bank sites. They poll the server and never go idle. Wait for a heading or a button instead.
+8. Do not click "Accept" or "No thanks" on an offer page. Go to the next URL with `goto` instead.
 
 ## Tests
 

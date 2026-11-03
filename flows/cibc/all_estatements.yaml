@@ -1,0 +1,15 @@
+# Fetch the CIBC credit card eStatements that OneDrive does not have yet.
+# 1. Mirror the OneDrive folder to output/cibc (names only matter; files are small).
+# 2. Sign on. Download the statements of both cards. Existing files are skipped.
+# 3. Push new files to OneDrive.
+# Run: capabilities/browser.run_flow/run run flows/cibc/all_estatements.yaml
+name: cibc.all_estatements
+vars:
+  out: output/cibc
+  remote: "onedrive:10_个人档案/财税/CIBC eStatements"
+steps:
+  - shell: {cmd: 'mkdir -p "${var:out}" && rclone mkdir "${var:remote}" && rclone copy "${var:remote}" "${var:out}" && ls "${var:out}" | tail -3', name: before}
+  - include: login.yaml
+  - include: {flow: download_estatements.yaml, vars: {card: CIBC MasterCard}}
+  - include: {flow: download_estatements.yaml, vars: {card: CIBC VISA}}
+  - shell: {cmd: 'rclone copy "${var:out}" "${var:remote}" && rclone lsf "${var:remote}" | wc -l', name: remote_count}

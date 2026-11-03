@@ -1,0 +1,12 @@
+name: each
+headless: true
+vars: {card: Card A, page_url: ""}
+steps:
+  - include: {flow: smoke.yaml}
+  - download:
+      click: "#stmts button"
+      each: true
+      max: 5
+      dir: ${var:dir}
+      save_as: "${var:card} - eStatement {date}.txt"
+      ext: .txt

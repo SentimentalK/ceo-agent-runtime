@@ -1,0 +1,24 @@
+# Download the eStatement PDFs of one CIBC credit card into a flat folder.
+# File name: "<card> - eStatement <statement date>.pdf". Files that exist are skipped.
+# Needs a signed-on browser: include this flow after login.yaml, or use `attach`.
+name: cibc.download_estatements
+profile: cibc
+vars:
+  card: CIBC MasterCard        # link text on the Home page
+  out: output/cibc
+  max: 100                     # newest N statements to look at
+steps:
+  - goto: https://www.cibconline.cibc.com/ebm-resources/online-banking/accounts/client/index.html#/?channel=web
+  - wait_for: {target: 'role=heading[name="Credit Cards"]', timeout: 60}
+  - click: role=link[name="${var:card}"]
+  - click: {target: {role: link, name: View eStatements, first: true}, timeout: 60}
+  - wait_for: {target: 'role=heading[name="eSTATEMENTS"]', timeout: 60}
+  - wait_for: {target: {role: button, name: /Download this PDF/, first: true}, timeout: 60}
+  - download:
+      name: ${var:card}
+      click: {role: button, name: /Download this PDF/}
+      each: true
+      max: ${var:max}
+      dir: ${var:out}
+      save_as: "${var:card} - eStatement {date}.pdf"
+      timeout: 120
