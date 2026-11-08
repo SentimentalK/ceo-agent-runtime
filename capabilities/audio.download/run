@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: run "<URL>" [-o <OUTPUT_DIR>] [--quality <N>] [--dry-run]
+
+  -o DIR         Output folder. Default: current folder.
+  --quality N    MP3 quality: 0 (best, VBR V0) to 9 (smallest). Default: 0.
+  --dry-run      Print the yt-dlp command. Do not download.
+EOF
+    exit 2
+}
+
+OUTPUT_DIR="."
+QUALITY=0
+DRY_RUN=0
+URL=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -o|--output-dir)
+            OUTPUT_DIR="${2:-}"
+            shift 2
+            ;;
+        --quality)
+            QUALITY="${2:-}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -*)
+            echo "Error: unknown option: $1" >&2
+            usage
+            ;;
+        *)
+            if [[ -n "$URL" ]]; then
+                echo "Error: give one URL only." >&2
+                usage
+            fi
+            URL="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$URL" ]]; then
+    echo "Error: give a URL." >&2
+    usage
+fi
+
+if ! [[ "$QUALITY" =~ ^[0-9]$ ]]; then
+    echo "Error: --quality must be a number from 0 to 9." >&2
+    exit 2
+fi
+
+YT_DLP="${YT_DLP_PATH:-yt-dlp}"
+
+# Audio: the best audio-only stream, else the audio of the best combined stream.
+# yt-dlp then converts it to MP3 with ffmpeg.
+FORMAT="bestaudio/best"
+TEMPLATE="%(title)s [%(id)s].%(ext)s"
+
+CMD=(
+    "$YT_DLP"
+    -f "$FORMAT"
+    -x --audio-format mp3 --audio-quality "$QUALITY"
+    -o "$OUTPUT_DIR/$TEMPLATE"
+    "$URL"
+)
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf '%q ' "${CMD[@]}"
+    printf '\n'
+    exit 0
+fi
+
+if ! command -v "$YT_DLP" >/dev/null 2>&1 && [[ ! -x "$YT_DLP" ]]; then
+    echo "Error: yt-dlp not found. Install it, or set YT_DLP_PATH." >&2
+    exit 3
+fi
+
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "Error: ffmpeg not found in PATH. It converts the audio to MP3." >&2
+    exit 3
+fi
+
+mkdir -p "$OUTPUT_DIR"
+"${CMD[@]}"
