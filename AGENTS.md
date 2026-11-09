@@ -16,6 +16,7 @@ This repository contains reusable capabilities. The user and CEO agents use them
 |`wechat.login`|Start or check the WeChat Official Accounts backend session in a controlled Chrome profile.|`capabilities/wechat.login/AGENT_GUIDE.md`|
 |`wechat.article`|Extract a WeChat article. Create a draft from HTML or Markdown and images. Reprint an original article.|`capabilities/wechat.article/AGENT_GUIDE.md`|
 |`wechat.draft`|List drafts. Set a cover. Publish a draft with 群发通知 off. Delete a draft.|`capabilities/wechat.draft/AGENT_GUIDE.md`|
+|`music.playlist_to_cloud`|Download Spotify playlists with Downtify. Upload the tracks to OneDrive with rclone.|`capabilities/music.playlist_to_cloud/AGENT_GUIDE.md`|
 
 ## Rules
 
