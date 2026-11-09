@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Shared virtualenv for the wechat.* capabilities.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+command -v uv >/dev/null || { echo "error: uv is not installed" >&2; exit 2; }
+if [ ! -x .venv/bin/python ]; then
+  uv venv -q .venv --python 3.12
+fi
+uv pip install -q --python .venv/bin/python playwright python-docx pillow httpx lxml
+.venv/bin/python -c "import playwright, docx, PIL, httpx, lxml; print('wechat lib ok')"

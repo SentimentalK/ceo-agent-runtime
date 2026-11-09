@@ -12,7 +12,10 @@ This repository contains reusable capabilities. The user and CEO agents use them
 | `discord.channel` | Read messages in a Discord channel. Send a reply. Add a reaction. Delete a message. | `capabilities/discord.channel/AGENT_GUIDE.md` |
 |`video.download`|Download the video file (MP4) of a URL. Up to 1080p by default. Audio is not converted.|`capabilities/video.download/AGENT_GUIDE.md`|
 |`audio.download`|Download the audio of a URL as an MP3 file.|`capabilities/audio.download/AGENT_GUIDE.md`|
-| `browser.run_flow` | Run a YAML list of browser steps in a real Chrome profile: sign on, click, fill, download, extract. Site recipes are in `flows/<site>/`. | `capabilities/browser.run_flow/AGENT_GUIDE.md` |
+|`browser.run_flow`|Run a YAML list of browser steps in a real Chrome profile: sign on, click, fill, download, extract. Site recipes are in `flows/<site>/`.|`capabilities/browser.run_flow/AGENT_GUIDE.md`|
+|`wechat.login`|Start or check the WeChat Official Accounts backend session in a controlled Chrome profile.|`capabilities/wechat.login/AGENT_GUIDE.md`|
+|`wechat.article`|Extract a WeChat article. Create a draft from HTML or Markdown and images. Reprint an original article.|`capabilities/wechat.article/AGENT_GUIDE.md`|
+|`wechat.draft`|List drafts. Set a cover. Publish a draft with 群发通知 off. Delete a draft.|`capabilities/wechat.draft/AGENT_GUIDE.md`|
 
 ## Rules
 
