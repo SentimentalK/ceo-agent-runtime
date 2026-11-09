@@ -25,8 +25,8 @@ capabilities/music.playlist_to_cloud/run --upload-only "<PLAYLIST_NAME>" [option
 
 1. Sign in to Downtify.
 2. Resolve each playlist URL to its track list.
-3. Queue the batch download.
-4. Wait until the queue is empty.
+3. Queue the batch download. If a batch for this playlist is already running, wait for it instead.
+4. Wait until the queue is empty. The command also waits while other playlists download.
 5. Find the download folder of the playlist.
 6. Copy the MP3 and LRC files to `<dest>/<folder>`.
 7. Print a JSON report.

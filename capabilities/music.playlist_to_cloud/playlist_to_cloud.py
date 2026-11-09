@@ -98,11 +98,15 @@ class Downtify:
         return songs
 
     def batch(self, url: str, songs) -> dict:
+        payload = [
+            {**song, "downtify_playlist_url": url, "downtify_track_order": order}
+            for order, song in enumerate(songs)
+        ]
         return self.request(
             "/api/download/batch",
             method="POST",
             body={
-                "songs": songs,
+                "songs": payload,
                 "playlist_url": url,
                 "generate_m3u": True,
             },
@@ -124,6 +128,24 @@ class Downtify:
 
     def queue_active(self) -> int:
         return int(self.request("/api/queue/state").get("active") or 0)
+
+    def pending_for(self, url: str) -> int:
+        pending = 0
+        for item in self.request("/api/queue") or []:
+            song = item.get("song") or {}
+            if song.get("downtify_playlist_url") == url and item.get("status") in {
+                "queued",
+                "downloading",
+            }:
+                pending += 1
+        return pending
+
+    def queue_pending(self) -> int:
+        return sum(
+            1
+            for item in self.request("/api/queue") or []
+            if item.get("status") in {"queued", "downloading"}
+        )
 
     def playlist_folder(self, playlist_name: str):
         details = self.request(
@@ -161,15 +183,30 @@ def resolve_folder(client: Downtify, playlist_name: str, downloads: str) -> str:
 
 
 def wait_for_batch(client: Downtify, url: str, after_id: int, poll: float, timeout: float) -> dict:
+    """Wait until the queue is empty and the playlist batch reports a final state.
+
+    Downtify keeps a batch at ``incomplete`` while its tracks are still queued,
+    so the queue is the reliable signal.  Two idle polls in a row end the wait.
+    """
     deadline = time.monotonic() + timeout
     seen = None
+    idle = 0
     while time.monotonic() < deadline:
         status = client.batch_status(url, after_id)
         if status:
             seen = status
-            terminal = status.get("status") in {"complete", "incomplete", "failed", "error"}
-            if terminal and not status.get("active_in_queue") and not client.queue_active():
-                return status
+            pending = client.queue_pending()
+            active = client.queue_active()
+            if pending == 0 and active == 0 and not status.get("active_in_queue"):
+                idle += 1
+                if status.get("status") == "complete" or idle >= 2:
+                    return status
+            else:
+                idle = 0
+                log(
+                    f"waiting: {status.get('downloaded_count')}/{status.get('expected_count')} "
+                    f"done, {pending} queued, {active} downloading"
+                )
         time.sleep(poll)
     detail = json.dumps(seen, ensure_ascii=False) if seen else "no batch status"
     raise DowntifyError(f"Timed out after {timeout:.0f}s waiting for {url}: {detail}")
@@ -219,9 +256,17 @@ def run_playlist(client: Downtify, url: str, args) -> dict:
         entry["action"] = "dry-run"
         return entry
 
-    before = client.max_batch_id(url)
-    client.batch(url, songs)
-    log(f"Queued the download. Waiting up to {args.timeout:.0f}s ...")
+    running = client.batch_status(url, 0)
+    still_queued = bool(running) and client.pending_for(url) > 0
+    if running and (
+        running.get("status") not in {"complete", "failed", "error"} or still_queued
+    ):
+        log(f"A batch is already running. Waiting up to {args.timeout:.0f}s ...")
+        before = 0
+    else:
+        before = client.max_batch_id(url)
+        client.batch(url, songs)
+        log(f"Queued the download. Waiting up to {args.timeout:.0f}s ...")
     status = wait_for_batch(client, url, before, args.poll, args.timeout)
 
     name = status.get("playlist_name") or ""
